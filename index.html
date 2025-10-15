@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Solar System — Realtime Orbit Demo</title>
+  <style>
+    :root{
+      --bg:#0b1020;
+      --sun:#ffcc33;
+      --mercury:#b1b1b1;
+      --venus:#d4a15a;
+      --earth:#2e8bff;
+      --mars:#d14b2a;
+      --jupiter:#d7b58f;
+      --saturn:#e5c67a;
+      --uranus:#7fd1d6;
+      --neptune:#5c74ff;
+      --orbit:#1b2a50;
+      --text:#e7eefc;
+      --muted:#9fb0d0;
+      --ring:#cdbb8a88;
+    }
+    *{box-sizing:border-box}
+    html,body{height:100%;}
+    body{
+      margin:0;
+      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, "Helvetica Neue", Arial, "Noto Sans", "Apple Color Emoji", "Segoe UI Emoji";
+      background: radial-gradient(1200px 800px at 50% 60%, #101b3a 0%, #0b1020 60%, #080c18 100%);
+      color:var(--text);
+      overflow:hidden;
+    }
+
+    /* Starfield */
+    canvas#stars{position:fixed; inset:0; z-index:0;}
+
+    .hud{
+      position:fixed; left:20px; top:20px; z-index:3;
+      background:linear-gradient(180deg, #0f1a33cc, #0c1429cc);
+      border:1px solid #1f315f; border-radius:16px; padding:12px 14px; backdrop-filter: blur(6px);
+      box-shadow:0 6px 20px #0008;
+    }
+    .hud h1{margin:0 0 6px; font-size:20px; letter-spacing:.4px}
+    .hud p{margin:2px 0; color:var(--muted); font-size:13px}
+
+    .scene{ position:relative; width:100vw; height:100vh; z-index:1; display:grid; place-items:center; }
+
+    .system{ position:relative; width:min(90vmin,900px); height:min(90vmin,900px); }
+
+    /* Sun */
+    .sun{ position:absolute; left:50%; top:50%; transform:translate(-50%,-50%);
+      width:90px; height:90px; border-radius:50%; background:radial-gradient(circle at 30% 30%, #fff6a1, var(--sun));
+      box-shadow:0 0 40px 10px #ffda4a88, 0 0 120px 30px #ffb20044;
+    }
+
+    /* Orbit ring */
+    .orbit{ position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); border-radius:50%;
+      border:1px dashed var(--orbit);
+      animation: rotate linear infinite;
+    }
+    @keyframes rotate { to { transform: translate(-50%,-50%) rotate(360deg);} }
+
+    /* Planet holders */
+    .planet{ position:absolute; top:50%; left:0; transform:translate(-50%,-50%); border-radius:50%;
+      box-shadow: inset -6px -8px 12px #0004, 0 0 12px #0007;
+    }
+
+    /* Tooltips */
+    .planet:hover::after{
+      content:attr(data-name);
+      position:absolute; top:-28px; left:50%; transform:translateX(-50%);
+      background:#0e1a37; padding:4px 8px; border-radius:8px; font-size:12px; color:var(--text);
+      border:1px solid #21366b; white-space:nowrap;
+    }
+
+    /* Info panel */
+    .info{
+      position:fixed; right:20px; bottom:20px; z-index:3;
+      width:min(360px, 90vw); padding:12px 14px; border-radius:16px;
+      background:linear-gradient(180deg, #0f1b35cc, #0b142acc); border:1px solid #1f315f; backdrop-filter: blur(6px);
+      box-shadow:0 6px 20px #0008; font-size:14px; color:var(--muted);
+    }
+    .info h2{margin:0 0 8px; font-size:16px; color:var(--text)}
+    .row{display:flex; gap:10px; flex-wrap:wrap}
+    .chip{font-size:12px; padding:4px 8px; border-radius:999px; border:1px solid #28417e; color:#cfe1ff}
+
+    /* Saturn ring */
+    .ring{ position:absolute; inset:-6px; border:2px solid var(--ring); border-radius:50%; transform:skewY(18deg) rotate(-10deg);}
+
+    /* Sizes & orbit radii (not to scale, just vibe) */
+    /* Durations are proportional-ish to real orbital periods, sped up */
+    .o1{ width:140px; height:140px; animation-duration: 8s; }
+    .o2{ width:200px; height:200px; animation-duration: 20s; }
+    .o3{ width:270px; height:270px; animation-duration: 30s; }
+    .o4{ width:340px; height:340px; animation-duration: 56s; }
+    .o5{ width:440px; height:440px; animation-duration: 140s; }
+    .o6{ width:520px; height:520px; animation-duration: 350s; }
+    .o7{ width:600px; height:600px; animation-duration: 700s; }
+    .o8{ width:680px; height:680px; animation-duration: 1200s; }
+
+    .p-mercury{ width:8px; height:8px; background:var(--mercury);} 
+    .p-venus{ width:14px; height:14px; background:var(--venus);} 
+    .p-earth{ width:16px; height:16px; background:var(--earth);} 
+    .p-mars{ width:12px; height:12px; background:var(--mars);} 
+    .p-jupiter{ width:28px; height:28px; background:var(--jupiter);} 
+    .p-saturn{ width:24px; height:24px; background:var(--saturn);} 
+    .p-uranus{ width:18px; height:18px; background:var(--uranus);} 
+    .p-neptune{ width:18px; height:18px; background:var(--neptune);} 
+
+    /* Pause on hover */
+    .system:hover .orbit{ animation-play-state: paused; }
+
+    @media (max-width: 768px){
+      .system{ width:min(95vmin,700px); height:min(95vmin,700px);} 
+      .sun{ width:70px; height:70px; }
+    }
+  </style>
+</head>
+<body>
+  <canvas id="stars"></canvas>
+  <div class="hud">
+    <h1>Solar System (2D)</h1>
+    <p>Hover to pause • Click a planet for facts</p>
+  </div>
+
+  <main class="scene">
+    <section class="system" aria-label="Solar System Model">
+      <div class="sun" title="Sun"></div>
+
+      <div class="orbit o1" data-name="Mercury orbit">
+        <div class="planet p-mercury" data-name="Mercury" data-facts='{"Orbital period":"88 days","Type":"Terrestrial","Avg distance":"58M km"}'></div>
+      </div>
+      <div class="orbit o2" data-name="Venus orbit">
+        <div class="planet p-venus" data-name="Venus" data-facts='{"Orbital period":"225 days","Type":"Terrestrial","Avg distance":"108M km"}'></div>
+      </div>
+      <div class="orbit o3" data-name="Earth orbit">
+        <div class="planet p-earth" data-name="Earth" data-facts='{"Orbital period":"365 days","Type":"Terrestrial","Avg distance":"150M km"}'></div>
+      </div>
+      <div class="orbit o4" data-name="Mars orbit">
+        <div class="planet p-mars" data-name="Mars" data-facts='{"Orbital period":"687 days","Type":"Terrestrial","Avg distance":"228M km"}'></div>
+      </div>
+      <div class="orbit o5" data-name="Jupiter orbit">
+        <div class="planet p-jupiter" data-name="Jupiter" data-facts='{"Orbital period":"12 years","Type":"Gas giant","Avg distance":"779M km"}'></div>
+      </div>
+      <div class="orbit o6" data-name="Saturn orbit">
+        <div class="planet p-saturn" data-name="Saturn" data-facts='{"Orbital period":"29 years","Type":"Gas giant","Rings":"Yes"}'>
+          <span class="ring" aria-hidden="true"></span>
+        </div>
+      </div>
+      <div class="orbit o7" data-name="Uranus orbit">
+        <div class="planet p-uranus" data-name="Uranus" data-facts='{"Orbital period":"84 years","Type":"Ice giant","Tilt":"98°"}'></div>
+      </div>
+      <div class="orbit o8" data-name="Neptune orbit">
+        <div class="planet p-neptune" data-name="Neptune" data-facts='{"Orbital period":"165 years","Type":"Ice giant","Wind":"2,000 km/h"}'></div>
+      </div>
+    </section>
+  </main>
+
+  <aside class="info" id="info">
+    <h2>Click a planet</h2>
+    <div class="row" id="chips"></div>
+    <p id="blurb">Tip: Hover anywhere to pause all orbits. Works great as a landing-page hero or interactive splash.</p>
+  </aside>
+
+  <script>
+    // Tiny starfield
+    (function(){
+      const c = document.getElementById('stars');
+      const ctx = c.getContext('2d');
+      function resize(){ c.width = innerWidth; c.height = innerHeight; }
+      addEventListener('resize', resize); resize();
+      const stars = Array.from({length: 400}, () => ({
+        x: Math.random()*c.width,
+        y: Math.random()*c.height,
+        r: Math.random()*1.2 + 0.2,
+        a: Math.random(),
+        s: Math.random()*0.02 + 0.002
+      }));
+      function draw(){
+        ctx.clearRect(0,0,c.width,c.height);
+        for(const st of stars){
+          st.a += st.s; const alpha = 0.2 + 0.8*Math.abs(Math.sin(st.a));
+          ctx.globalAlpha = alpha;
+          ctx.beginPath(); ctx.arc(st.x, st.y, st.r, 0, Math.PI*2); ctx.fillStyle = '#ffffff'; ctx.fill();
+        }
+        requestAnimationFrame(draw);
+      }
+      draw();
+    })();
+
+    // Click for facts
+    const info = document.getElementById('info');
+    const chips = document.getElementById('chips');
+    document.querySelectorAll('.planet').forEach(p => {
+      p.addEventListener('click', () => {
+        const name = p.dataset.name || 'Planet';
+        const facts = JSON.parse(p.dataset.facts || '{}');
+        info.querySelector('h2').textContent = name;
+        chips.innerHTML = '';
+        Object.entries(facts).forEach(([k,v]) => {
+          const span = document.createElement('span');
+          span.className = 'chip';
+          span.textContent = `${k}: ${v}`;
+          chips.appendChild(span);
+        });
+        document.getElementById('blurb').textContent = `${name} selected. Enjoy the vibes ✨`;
+      });
+    });
+  </script>
+</body>
+</html>
